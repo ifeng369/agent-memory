@@ -39,7 +39,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: HF_ENDPOINT=https://hf-mirror.com
+          build-args: HF_ENDPOINT=https://huggingface.co
 
       # 私有仓库推出来的包默认是私有，尝试设为公开；失败可在 GHCR 页面手动改
       - name: Make GHCR package public
