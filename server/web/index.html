@@ -305,11 +305,11 @@
         finally { adding.value = false; }
       }
       function deleteMemory(m) {
-        TDesign.DialogPlugin.confirm({
+        const dialog = TDesign.DialogPlugin.confirm({
           header: '删除记忆',
           body: '确定删除这条记忆吗？此操作不可撤销。',
           onConfirm: async () => {
-            try { await api('/api/v1/memories/' + m.id, { method: 'DELETE' }); msg('success', '已删除'); await loadMemories(); }
+            try { await api('/api/v1/memories/' + m.id, { method: 'DELETE' }); msg('success', '已删除'); await loadMemories(); dialog.hide(); }
             catch (e) { msg('error', e.message); }
           }
         });
