@@ -1,0 +1,8 @@
+node_modules/
+plugins/opencode/dist/
+server/__pycache__/
+server/src/**/__pycache__/
+server/models/
+server/logs/
+.env
+*.pyc

@@ -1,0 +1,3 @@
+-r requirements.txt
+# 仅在构建阶段导出 ONNX 模型时需要；会依赖 PyTorch
+optimum[onnxruntime]==1.16.2

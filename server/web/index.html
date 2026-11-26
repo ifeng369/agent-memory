@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>agent-memory 管理台</title>
+<style>
+  body{font:14px system-ui;margin:24px;max-width:1000px;color:#222}
+  fieldset{border:1px solid #ddd;border-radius:8px;margin-bottom:16px;padding:12px}
+  legend{font-weight:600}
+  label{display:inline-block;margin:4px 8px 4px 0}
+  input,select,textarea{font:inherit;padding:5px;border:1px solid #ccc;border-radius:4px}
+  textarea{width:100%;min-height:60px;box-sizing:border-box}
+  button{font:inherit;padding:6px 14px;cursor:pointer}
+  pre{background:#f6f6f6;padding:12px;border-radius:6px;white-space:pre-wrap;word-break:break-all;min-height:80px}
+  .row{margin:4px 0}
+</style>
+</head>
+<body>
+<h1>agent-memory 管理台</h1>
+<fieldset><legend>连接与作用范围</legend>
+  <label>API <input id="base" value="/api/v1" size="30"></label>
+  <label>Key <input id="key" placeholder="留空则使用默认密钥" size="20"></label>
+  <label>项目 <input id="project" value="memory" size="18"></label>
+  <label>Agent <input id="agent" value="web" size="14"></label>
+  <label>会话 <input id="session" value="web-ui" size="14"></label>
+</fieldset>
+<fieldset><legend>写入记忆</legend>
+  <textarea id="content" placeholder="要记住的内容"></textarea>
+  <div class="row">
+    <label>类型 <select id="type"><option>long_term</option><option>short_term</option><option>working</option><option>semantic</option><option>episodic</option></select></label>
+    <label>重要性 <input id="importance" type="number" value="0.5" min="0" max="1" step="0.1"></label>
+    <label>标签(逗号分隔) <input id="tags" size="24"></label>
+    <button onclick="add()">添加</button>
+  </div>
+</fieldset>
+<fieldset><legend>检索与列表</legend>
+  <label>查询 <input id="query" size="34"></label>
+  <label>阈值 <input id="threshold" type="number" value="0.5" min="0" max="1" step="0.1"></label>
+  <label>条数 <input id="limit" type="number" value="10" min="1"></label>
+  <button onclick="search()">语义检索</button>
+  <button onclick="list()">列出本页</button>
+  <label>删除 ID <input id="deleteId" size="28"></label>
+  <button onclick="del()">删除</button>
+</fieldset>
+<pre id="out">就绪。</pre>
+<script>
+const $ = id => document.getElementById(id);
+const out = v => { $("out").textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2); };
+function headers() {
+  const h = { "Content-Type": "application/json", "X-Project-Id": $("project").value,
+    "X-Agent-Id": $("agent").value, "X-Session-Id": $("session").value };
+  if ($("key").value) h["X-API-Key"] = $("key").value;
+  return h;
+}
+async function call(method, path, body) {
+  try {
+    const r = await fetch($("base").value + path, { method, headers: headers(), body: body ? JSON.stringify(body) : undefined });
+    out(await r.json());
+  } catch (e) { out("请求失败: " + e.message); }
+}
+function add() {
+  const tags = $("tags").value.split(",").map(s => s.trim()).filter(Boolean);
+  call("POST", "/memories", { content: $("content").value, type: $("type").value,
+    importance: Number($("importance").value), tags });
+}
+function search() {
+  const q = encodeURIComponent($("query").value);
+  call("POST", `/memories/search?query=${q}&threshold=${$("threshold").value}&limit=${$("limit").value}`);
+}
+function list() { call("GET", `/memories?limit=${$("limit").value}`); }
+function del() { call("DELETE", "/memories/" + encodeURIComponent($("deleteId").value)); }
+</script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+name: agent-memory
+
+services:
+  agent-memory:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+      args:
+        HF_ENDPOINT: https://hf-mirror.com
+    image: agent-memory:latest
+    container_name: agent-memory
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://memory_user:memory_pass@db:5432/memory
+      - API_SECRET=${API_SECRET:-your-secret-key-change-in-production}
+      - MODEL_NAME=/app/models/agent-memory-onnx
+      - BATCH_SIZE=32
+      - OMP_NUM_THREADS=2
+      - MKL_NUM_THREADS=2
+    volumes:
+      - ./server/logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  db:
+    image: pgvector/pgvector:pg19-trixie
+    container_name: agent-memory-db
+    environment:
+      - POSTGRES_DB=memory
+      - POSTGRES_USER=memory_user
+      - POSTGRES_PASSWORD=memory_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ./server/init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c effective_cache_size=256MB
+      -c work_mem=32MB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U memory_user -d memory"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: agent-memory-network
