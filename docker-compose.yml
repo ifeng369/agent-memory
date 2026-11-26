@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
       args:
         HF_ENDPOINT: https://hf-mirror.com
-    image: agent-memory:latest
+    image: ghcr.io/ifeng369/agent-memory:latest
     container_name: agent-memory
     ports:
       - "3000:3000"

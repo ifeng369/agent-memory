@@ -1,15 +1,24 @@
 /**
  * agent-memory - OpenCode V2 服务端插件
  *
- * 三个显式工具 + 两个自动 hook：模型调用前注入相关记忆，每 3 条用户消息抽取一次事实。
+ * 三个显式工具 + 两个自动 hook：模型调用前注入相关记忆，每 3 条用户消息抽取一次事实；
+ * 会话首次 prompt 生成项目使用说明与知识库摘要，供 Web 端按文档浏览/导出 PDF。
  * 配置优先级：插件 options > 环境变量；项目 ID 默认由 git remote 推导，保证跨 Agent 一致。
  */
 import { execFileSync } from "node:child_process"
-import { basename } from "node:path"
+import { existsSync, readFileSync } from "node:fs"
+import { basename, join } from "node:path"
 import { Plugin } from "@opencode/plugin"
 import { MemoryClient } from "./client"
 
 const CAPTURE_EVERY = 3
+const DOC_FILES = [
+  "README.md",
+  "USAGE.md",
+  "docker-compose.yml",
+  "package.json",
+  "plugins/opencode/package.json",
+]
 
 function projectIdFromGit(directory?: string): string {
   if (!directory) return "default"
@@ -55,6 +64,51 @@ export default Plugin.define({
       agentId: pick("agentId", "MEMORY_AGENT_ID") ?? "opencode",
     })
 
+    // 会话首次 prompt 时生成项目使用说明 + 知识库摘要（upsert，不重复堆积）
+    const docsDone = new Set<string>()
+    const ensureDocs = async (sessionID: string) => {
+      if (docsDone.has(sessionID)) return
+      docsDone.add(sessionID)
+      try {
+        const dir = ctx.location.directory ?? ctx.location.project?.canonical ?? process.cwd()
+        const files: string[] = []
+        for (const file of DOC_FILES) {
+          const full = join(dir, file)
+          if (!existsSync(full)) continue
+          files.push(`### ${file}\n${readFileSync(full, "utf8").slice(0, 20000)}`)
+        }
+        if (files.length === 0) return
+        const { text } = await ctx.experimental.generate.text({
+          prompt: [
+            "基于下面的项目文件生成两份中文文档，供团队在开发时参考。",
+            "第一部分是使用说明：面向使用者，写部署、配置、常用操作。",
+            "第二部分是知识库摘要：面向开发者，写架构、约定、配置和已知的坑。",
+            "两部分之间用单独一行 ---KB--- 分隔，每部分不超过 1500 字，不要输出其它内容。",
+            "",
+            ...files,
+          ].join("\n"),
+        })
+        const [usage, kb] = text.split(/^---KB---$/m)
+        const scoped = client.withSession(sessionID)
+        const existing = await scoped.list({ type: "semantic", tags: ["kb"], limit: 100 })
+        for (const [kind, content] of [["usage", usage], ["kb", kb]] as const) {
+          const body = content?.trim()
+          if (!body || body.length < 40) continue
+          const input = {
+            content: body,
+            type: "semantic" as const,
+            tags: ["kb", kind],
+            metadata: { kind, generated: true },
+          }
+          const found = existing.find((m) => m.metadata?.kind === kind)
+          if (found) await scoped.update(found.id, input)
+          else await scoped.add(input)
+        }
+      } catch {
+        // 生成失败不影响当前会话
+      }
+    }
+
     // 模型调用前自动召回：注入 system 而不是改写历史，失败不影响会话
     const recalls = new Map<string, { text: string; lines: string[] }>()
     await ctx.session.hook("context", async (event) => {
@@ -86,6 +140,7 @@ export default Plugin.define({
     // 每 3 条用户消息抽取一次事实；抽取用 Agent 自己的模型，服务端不跑 LLM
     const counts = new Map<string, number>()
     await ctx.session.hook("prompt", async (event) => {
+      await ensureDocs(event.sessionID)
       const text = event.prompt.text.trim()
       if (text.length < 20) return
       const count = (counts.get(event.sessionID) ?? 0) + 1
