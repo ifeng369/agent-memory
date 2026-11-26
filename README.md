@@ -3,7 +3,7 @@
 供 OpenCode 及其他 Agent 使用的跨会话记忆服务。
 
 - **Docker 端**：镜像 `agent-memory`，FastAPI + PostgreSQL(pgvector) + ONNX Runtime，提供增/删/改/查/语义检索/压缩，附带 Web 管理台（`/web`）。
-- **Agent 端插件**：OpenCode V2 插件 `agent-memory-plugin`，注册 `memory_remember` / `memory_recall` / `memory_forget`，自动召回与每 3 条消息抽取；`src/client.ts` 可作其它 Agent 的 TS 客户端。
+- **Agent 端插件**：OpenCode V2 插件 `@ifeng369/agent-memory-plugin`（GitHub Packages），注册 `memory_remember` / `memory_recall` / `memory_forget`，自动召回与每 3 条消息抽取；`src/client.ts` 可作其它 Agent 的 TS 客户端。
 - **跨 Agent 共享**：同一 `project_id` 下记忆对所有 Agent 可见。项目 ID 默认取 git remote URL（无 remote 用目录名）。
 
 ## 启动服务端
@@ -25,7 +25,7 @@ curl http://localhost:3000/api/health
 
 ## 接入 OpenCode
 
-插件目录：`plugins/opencode`（包名 `agent-memory-plugin`），也可从 npm 安装：`opencode plugin add agent-memory-plugin@latest`。全局配置 `opencode.jsonc` 示例：
+插件目录：`plugins/opencode`（包名 `@ifeng369/agent-memory-plugin`，发布在 GitHub Packages）。安装需先配置认证：`~/.npmrc` 写 `//npm.pkg.github.com/:_authToken=TOKEN`（TOKEN 为带 `read:packages` 的 classic PAT），然后 `opencode plugin add @ifeng369/agent-memory-plugin@latest`。全局配置 `opencode.jsonc` 示例：
 
 ```jsonc
 {
@@ -84,7 +84,7 @@ const hits = await client.search('用户喜欢什么语言？')
 docker pull ghcr.io/ifeng369/agent-memory:latest
 ```
 
-提交任意 tag 时 `.github/workflows/release.yml` 会自动构建并推送镜像到 GHCR，包含 tag 名、`latest`、完整版本号、主版本.次版本；同时把 `plugins/opencode` 发布到 npm（需先在仓库 Settings → Secrets 添加 `NPM_TOKEN`，值为 npm access token）。workflow 会尝试把 GHCR 包设为 public；若因权限失败，到 GHCR 包页面手动改可见性即可。
+提交任意 tag 时 `.github/workflows/release.yml` 会自动构建并推送镜像到 GHCR，包含 tag 名、`latest`、完整版本号、主版本.次版本；同时把 `plugins/opencode` 发布到 GitHub Packages（`@ifeng369/agent-memory-plugin`，用 Actions 自带的 `GITHUB_TOKEN`，无需额外 secret）。workflow 会尝试把 GHCR 镜像与 npm 包设为 public；若因权限失败，到对应包页面手动改可见性即可。
 
 ## 已知限制
 
