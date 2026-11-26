@@ -6,7 +6,7 @@
  * 配置优先级：插件 options > 环境变量；项目 ID 默认由 git remote 推导，保证跨 Agent 一致。
  */
 import { execFileSync } from "node:child_process"
-import { existsSync, readFileSync } from "node:fs"
+import { readdirSync, readFileSync, statSync } from "node:fs"
 import { basename, join } from "node:path"
 import { Plugin } from "@opencode/plugin"
 import { MemoryClient } from "./client"
@@ -14,13 +14,59 @@ import { MemoryClient } from "./client"
 const IDLE_DEBOUNCE_MS = 8000
 const CAPTURE_BUDGET = 14000
 const GLOBAL_PROJECT = "global"
-const DOC_FILES = [
-  "README.md",
-  "USAGE.md",
-  "docker-compose.yml",
-  "package.json",
-  "plugins/opencode/package.json",
-]
+const DOC_NAME = /^(README|USAGE|AGENTS|CLAUDE|CHANGELOG|CONTRIBUTING)/i
+const SRC_EXT = /\.(md|markdown|yml|yaml|json|toml|py|ts|tsx|js|jsx|go|rs|java)$/i
+const SKIP_DIRS = new Set(["node_modules", "vendor", "dist", "build", ".venv", "__pycache__", "logs", "data", ".git", ".opencode", ".cache"])
+
+// 不固定白名单：按规则扫描文档，找不到文档再回退到源码
+function scanFiles(root: string, maxDepth: number, accept: (name: string) => boolean, limit: number): string[] {
+  const out: string[] = []
+  const walk = (dir: string, depth: number) => {
+    if (depth > maxDepth || out.length >= limit) return
+    let entries: import("node:fs").Dirent[]
+    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
+    for (const entry of entries) {
+      if (out.length >= limit) break
+      if (entry.isDirectory()) {
+        if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith(".")) walk(join(dir, entry.name), depth + 1)
+      } else if (entry.isFile() && accept(entry.name)) {
+        out.push(join(dir, entry.name))
+      }
+    }
+  }
+  walk(root, 0)
+  return out
+}
+
+function docRoots(root: string): string[] {
+  const roots = [root]
+  try {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (entry.isDirectory() && !SKIP_DIRS.has(entry.name) && !entry.name.startsWith(".")) roots.push(join(root, entry.name))
+    }
+  } catch { /* ignore */ }
+  return roots
+}
+
+function findDocFiles(root: string): string[] {
+  const out: string[] = []
+  for (const base of docRoots(root)) {
+    for (const file of scanFiles(base, 1, (name) => DOC_NAME.test(name) || /^(docker-compose|package\.json|pyproject\.toml|go\.mod|Cargo\.toml)/i.test(name), 20)) {
+      if (!out.includes(file)) out.push(file)
+    }
+  }
+  return out.slice(0, 20)
+}
+
+function findSourceFiles(root: string): string[] {
+  const out: string[] = []
+  for (const base of docRoots(root)) {
+    for (const file of scanFiles(base, 3, (name) => SRC_EXT.test(name), 12)) {
+      if (!out.includes(file)) out.push(file)
+    }
+  }
+  return out.slice(0, 12)
+}
 
 function projectIdFromGit(directory?: string): string {
   if (!directory) return "default"
@@ -142,22 +188,29 @@ export default Plugin.define({
     const ensureDocs = async (sessionID: string) => {
       if (docsDone.has(sessionID)) return
       try {
-        const dir = ctx.location.directory ?? ctx.location.project?.canonical ?? process.cwd()
-        const files: string[] = []
-        for (const file of DOC_FILES) {
-          const full = join(dir, file)
-          if (!existsSync(full)) continue
-          files.push(`### ${file}\n${readFileSync(full, "utf8").slice(0, 20000)}`)
+        const dir = ctx.location.project?.canonical ?? ctx.location.directory ?? process.cwd()
+        const docs = findDocFiles(dir)
+        const files = docs.length ? docs : findSourceFiles(dir)
+        if (files.length === 0) {
+          console.error("[agent-memory] no docs or source files found for", dir)
+          return
         }
-        if (files.length === 0) return
+        const fingerprint = files.map((file) => `${file}:${statSync(file).size}:${Math.floor(statSync(file).mtimeMs / 1000)}`).join("|")
+        const cacheKey = `docs-fingerprint:${dir}`
+        if ((await ctx.storage.get(cacheKey)) === fingerprint) {
+          docsDone.add(sessionID)
+          return
+        }
+        const blocks = files.map((file) => `### ${file}\n${clip(readFileSync(file, "utf8"), docs.length ? 20000 : 6000)}`)
         const { text } = await ctx.experimental.generate.text({
           prompt: [
             "基于下面的项目文件生成两份中文文档，供团队在开发时参考。",
+            "文件可能只有源码; 只写能从文件中确认的内容，不要编造功能。",
             "第一部分是使用说明：面向使用者，写部署、配置、常用操作。",
             "第二部分是知识库摘要：面向开发者，写架构、约定、配置和已知的坑。",
             "两部分之间用单独一行 ---KB--- 分隔，每部分不超过 1500 字，不要输出其它内容。",
             "",
-            ...files,
+            ...blocks,
           ].join("\n"),
         })
         const [usage, kb] = text.split(/^---KB---$/m)
@@ -176,6 +229,7 @@ export default Plugin.define({
           if (found) await scoped.update(found.id, input)
           else await scoped.add(input)
         }
+        await ctx.storage.set(cacheKey, fingerprint)
         docsDone.add(sessionID)
       } catch (e) {
         console.error("[agent-memory] docs generation failed", e)

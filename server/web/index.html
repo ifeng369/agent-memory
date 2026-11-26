@@ -154,6 +154,13 @@
       <div id="docs-print">
         <div v-if="currentDoc" class="doc-body" v-html="renderMarkdown(currentDoc.content)"></div>
         <div v-else class="empty">暂无项目文档，开发者会话首次提问时会自动生成。</div>
+        <div v-if="autoNotes.length" class="doc-body">
+          <h3>过程沉淀（自动记忆）</h3>
+          <div v-for="n in autoNotes" :key="n.id" class="mem-item">
+            <div class="mem-content">{{ n.content }}</div>
+            <div class="mem-meta">{{ n.created_at }}</div>
+          </div>
+        </div>
       </div>
     </t-tab-panel>
   </t-tabs>
@@ -186,6 +193,7 @@
       const search = reactive({ query: '', threshold: 0.5, limit: 20, agentId: '' });
       const memories = ref([]);
       const docs = ref([]);
+      const autoNotes = ref([]);
       const docId = ref('');
       const resultTitle = ref('记忆列表');
       const addDialog = ref(false);
@@ -316,8 +324,10 @@
       }
       async function loadDocs() {
         try {
-          const r = await api('/api/v1/memories?type=semantic&limit=100');
-          docs.value = (r.data || []).filter(m => m.metadata && (m.metadata.kind === 'usage' || m.metadata.kind === 'kb'));
+          const r = await api('/api/v1/memories?limit=100');
+          const all = r.data || [];
+          docs.value = all.filter(m => m.metadata && (m.metadata.kind === 'usage' || m.metadata.kind === 'kb'));
+          autoNotes.value = all.filter(m => m.metadata && m.metadata.source === 'auto');
           if (!docId.value && docs.value.length) docId.value = docs.value[0].id;
         } catch (e) { msg('error', e.message); }
       }
@@ -345,7 +355,7 @@
         gateKey.value = cfg.apiKey;
         if (cfg.apiKey) unlock(true);
       });
-      return { cfg, unlocked, gateKey, unlocking, unlock, tab, form, search, memories, docs, docId, currentDoc, resultTitle, addDialog, adding, editingId, projects, saveConfig, testConnection, loadMemories, doSearch, openAdd, openEdit, addMemory, deleteMemory, loadDocs, loadProjects, selectProject, exportPdf, renderMarkdown, reloadAll };
+      return { cfg, unlocked, gateKey, unlocking, unlock, tab, form, search, memories, docs, autoNotes, docId, currentDoc, resultTitle, addDialog, adding, editingId, projects, saveConfig, testConnection, loadMemories, doSearch, openAdd, openEdit, addMemory, deleteMemory, loadDocs, loadProjects, selectProject, exportPdf, renderMarkdown, reloadAll };
     }
   });
   components.forEach(name => {

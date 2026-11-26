@@ -72,7 +72,7 @@ GitHub Packages 的 npm 包即使设为 public，安装时也要 token；且必�
 
 ## 项目知识库与使用说明
 
-会话首次 prompt 时，插件读取项目里的 `README.md` / `USAGE.md` / `docker-compose.yml` / `package.json` / `plugins/opencode/package.json`，用 Agent 自身模型生成「使用说明」和「知识库摘要」，以项目作用域写入记忆（标签 `kb`/`usage`，`metadata.kind=usage|kb`）。文件变化后新会话自动 upsert，不重复堆积。Web 管理台切到「文档 / 知识库」即可按文档浏览；点「导出 PDF」用浏览器打印保存为 PDF。首次生成约消耗 5k–15k input + 1k output tokens。
+会话首次 prompt 时，插件自动扫描项目文档（README / USAGE / AGENTS / docs / docker-compose / package 等，向下看一层子目录）；没有文档时回退扫描源码（src / server/src / app / lib 等，最多 12 个文件）。用 Agent 自身模型生成「使用说明」和「知识库摘要」，以项目作用域写入记忆（标签 `kb`/`usage`，`metadata.kind=usage|kb`）。指纹未变则跳过生成，文件变化后新会话自动 upsert，不重复堆积。会话空闲后自动总结出的 `source=auto` 记忆会持续累积，Web 文档页在摘要下方以「过程沉淀」展示。Web 管理台切到「文档 / 知识库」即可按文档浏览；点「导出 PDF」用浏览器打印保存为 PDF。首次生成约消耗 5k–15k input + 1k output tokens。
 
 ## 其它 Agent 直接调用 HTTP
 
