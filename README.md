@@ -25,7 +25,7 @@ curl http://localhost:3000/api/health
 
 ## 接入 OpenCode
 
-插件目录：`plugins/opencode`（包名 `agent-memory-plugin`）。全局配置 `opencode.jsonc` 示例：
+插件目录：`plugins/opencode`（包名 `agent-memory-plugin`），也可从 npm 安装：`opencode plugin add agent-memory-plugin@latest`。全局配置 `opencode.jsonc` 示例：
 
 ```jsonc
 {
@@ -84,7 +84,7 @@ const hits = await client.search('用户喜欢什么语言？')
 docker pull ghcr.io/ifeng369/agent-memory:latest
 ```
 
-提交任意 tag 时 `.github/workflows/release.yml` 会自动构建并推送镜像到 GHCR，包含 tag 名、`latest`、完整版本号、主版本.次版本。workflow 会尝试把包设为 public；若因权限失败，到 GHCR 包页面手动改可见性即可。
+提交任意 tag 时 `.github/workflows/release.yml` 会自动构建并推送镜像到 GHCR，包含 tag 名、`latest`、完整版本号、主版本.次版本；同时把 `plugins/opencode` 发布到 npm（需先在仓库 Settings → Secrets 添加 `NPM_TOKEN`，值为 npm access token）。workflow 会尝试把 GHCR 包设为 public；若因权限失败，到 GHCR 包页面手动改可见性即可。
 
 ## 已知限制
 
