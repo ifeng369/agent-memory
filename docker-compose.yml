@@ -2,11 +2,6 @@ name: agent-memory
 
 services:
   agent-memory:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-      args:
-        HF_ENDPOINT: https://hf-mirror.com
     image: ghcr.io/ifeng369/agent-memory:latest
     container_name: agent-memory
     ports:

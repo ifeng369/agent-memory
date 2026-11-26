@@ -59,6 +59,10 @@ jobs:
           registry-url: https://npm.pkg.github.com
           scope: '@ifeng369'
 
+      - name: Sync version from tag
+        working-directory: plugins/opencode
+        run: npm version --no-git-tag-version "${GITHUB_REF_NAME#v}"
+
       - name: Publish plugin to GitHub Packages
         working-directory: plugins/opencode
         env:
