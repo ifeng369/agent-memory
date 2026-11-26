@@ -73,28 +73,9 @@
 
   <t-tabs v-model="tab">
     <t-tab-panel value="memories" label="记忆管理">
-      <t-card title="写入记忆" class="no-print">
-        <div class="form-grid">
-          <div class="field" style="grid-column: 1 / -1;">
-            <label>内容</label>
-            <t-textarea v-model="form.content" :autosize="{ minRows: 2, maxRows: 6 }" placeholder="要长期记住的事实、偏好或约定" />
-          </div>
-          <div class="field">
-            <label>类型</label>
-            <t-select v-model="form.type">
-              <t-option value="long_term" label="long_term" />
-              <t-option value="short_term" label="short_term" />
-              <t-option value="semantic" label="semantic" />
-              <t-option value="episodic" label="episodic" />
-              <t-option value="working" label="working" />
-            </t-select>
-          </div>
-          <div class="field"><label>重要性 0-1</label><t-input-number v-model="form.importance" :min="0" :max="1" :step="0.1" /></div>
-          <div class="field"><label>标签（逗号分隔）</label><t-input v-model="form.tags" placeholder="preference, test" /></div>
-          <div class="field"><label>过期时间（ISO，可选）</label><t-input v-model="form.expiresAt" placeholder="2027-01-01T00:00:00Z" /></div>
-        </div>
-        <div class="toolbar"><t-button theme="primary" @click="addMemory">添加记忆</t-button></div>
-      </t-card>
+      <div class="toolbar no-print">
+        <t-button theme="primary" @click="openAdd">添加记忆</t-button>
+      </div>
 
       <t-card title="语义检索" class="no-print">
         <div class="form-grid">
@@ -134,6 +115,32 @@
         </t-list>
         <div v-else class="empty">暂无记忆</div>
       </t-card>
+
+      <t-dialog :visible="addDialog" @update:visible="v => addDialog = v" header="添加记忆" :width="600" :footer="false" class="no-print">
+        <div class="form-grid">
+          <div class="field" style="grid-column: 1 / -1;">
+            <label>内容</label>
+            <t-textarea v-model="form.content" :autosize="{ minRows: 3, maxRows: 8 }" placeholder="要长期记住的事实、偏好或约定" />
+          </div>
+          <div class="field">
+            <label>类型</label>
+            <t-select v-model="form.type">
+              <t-option value="long_term" label="long_term" />
+              <t-option value="short_term" label="short_term" />
+              <t-option value="semantic" label="semantic" />
+              <t-option value="episodic" label="episodic" />
+              <t-option value="working" label="working" />
+            </t-select>
+          </div>
+          <div class="field"><label>重要性 0-1</label><t-input-number v-model="form.importance" :min="0" :max="1" :step="0.1" /></div>
+          <div class="field"><label>标签（逗号分隔）</label><t-input v-model="form.tags" placeholder="preference, test" /></div>
+          <div class="field"><label>过期时间（ISO，可选）</label><t-input v-model="form.expiresAt" placeholder="2027-01-01T00:00:00Z" /></div>
+        </div>
+        <div class="toolbar">
+          <t-button theme="primary" :loading="adding" @click="addMemory">写入</t-button>
+          <t-button variant="outline" @click="addDialog = false">取消</t-button>
+        </div>
+      </t-dialog>
     </t-tab-panel>
 
     <t-tab-panel value="docs" label="文档 / 知识库">
@@ -185,6 +192,8 @@
       const docs = ref([]);
       const docId = ref('');
       const resultTitle = ref('记忆列表');
+      const addDialog = ref(false);
+      const adding = ref(false);
       const currentDoc = computed(() => docs.value.find(d => d.id === docId.value) || docs.value[0] || null);
       const projects = ref([]);
       async function loadProjects() {
@@ -266,16 +275,26 @@
           resultTitle.value = '检索结果（' + memories.value.length + '）';
         } catch (e) { msg('error', e.message); }
       }
+      function openAdd() {
+        form.content = '';
+        form.type = 'long_term';
+        form.importance = 0.8;
+        form.tags = '';
+        form.expiresAt = '';
+        addDialog.value = true;
+      }
       async function addMemory() {
         if (!form.content.trim()) { msg('warning', '请输入内容'); return; }
+        adding.value = true;
         const body = { content: form.content, type: form.type, importance: Number(form.importance), tags: parseTags(form.tags) };
         if (form.expiresAt) body.expires_at = form.expiresAt;
         try {
           await api('/api/v1/memories', { method: 'POST', body: JSON.stringify(body) });
-          form.content = '';
+          addDialog.value = false;
           msg('success', '已写入');
           await loadMemories();
         } catch (e) { msg('error', e.message); }
+        finally { adding.value = false; }
       }
       function deleteMemory(m) {
         TDesign.DialogPlugin.confirm({
@@ -318,7 +337,7 @@
         gateKey.value = cfg.apiKey;
         if (cfg.apiKey) unlock(true);
       });
-      return { cfg, unlocked, gateKey, unlocking, unlock, tab, form, search, memories, docs, docId, currentDoc, resultTitle, projects, saveConfig, testConnection, loadMemories, doSearch, addMemory, deleteMemory, loadDocs, loadProjects, selectProject, exportPdf, renderMarkdown, reloadAll };
+      return { cfg, unlocked, gateKey, unlocking, unlock, tab, form, search, memories, docs, docId, currentDoc, resultTitle, addDialog, adding, projects, saveConfig, testConnection, loadMemories, doSearch, openAdd, addMemory, deleteMemory, loadDocs, loadProjects, selectProject, exportPdf, renderMarkdown, reloadAll };
     }
   });
   components.forEach(name => {
