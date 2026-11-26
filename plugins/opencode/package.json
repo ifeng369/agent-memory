@@ -1,6 +1,6 @@
 {
   "name": "@ifeng369/agent-memory-plugin",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "agent-memory OpenCode V2 插件：为 Agent 提供记住/回忆/遗忘工具",
   "type": "module",
   "main": "src/index.ts",

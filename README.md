@@ -25,7 +25,7 @@ curl http://localhost:3000/api/health
 
 ## 接入 OpenCode
 
-插件已发布到 GitHub Packages：`@ifeng369/agent-memory-plugin@0.3.0`。安装需要 GitHub 认证（见下）。
+插件已发布到 GitHub Packages：`@ifeng369/agent-memory-plugin@0.4.0`。安装需要 GitHub 认证（见下）。
 
 ### 配置 GitHub Packages 认证（PAT）
 
@@ -40,8 +40,8 @@ GitHub Packages 的 npm 包即使设为 public，安装时也要 token；且必�
    //npm.pkg.github.com/:_authToken=ghp_xxxxxxxxxxxxxxxxxxxx
    ```
 
-4. 验证：`npm view @ifeng369/agent-memory-plugin version` 应输出 `0.3.0`。
-5. 安装：`opencode plugin add @ifeng369/agent-memory-plugin@0.3.0`。该命令只写字符串条目；要带 `options` 请把配置改成下面的对象形式。
+4. 验证：`npm view @ifeng369/agent-memory-plugin version` 应输出 `0.4.0`。
+5. 安装：`opencode plugin add @ifeng369/agent-memory-plugin@0.4.0`。该命令只写字符串条目；要带 `options` 请把配置改成下面的对象形式。
 
 不要把 token 写进仓库或 `opencode.jsonc`；`options.apiKey` 也建议改用环境变量 `MEMORY_API_KEY`。
 
@@ -52,7 +52,7 @@ GitHub Packages 的 npm 包即使设为 public，安装时也要 token；且必�
   "$schema": "https://opencode.ai/config.json",
   "plugins": [
     {
-      "package": "@ifeng369/agent-memory-plugin@0.3.0",
+      "package": "@ifeng369/agent-memory-plugin@0.4.0",
       "options": {
         "serverUrl": "http://localhost:3000",
         "apiKey": "your-secret-key-change-in-production",
