@@ -261,6 +261,13 @@ export class MemoryClient {
   }
 
   /**
+   * 派生一个使用指定项目作用域的客户端（如 global 项目）
+   */
+  withProject(projectId: string): MemoryClient {
+    return new MemoryClient({ ...this.config, projectId });
+  }
+
+  /**
    * 发送 HTTP 请求
    */
   private async request<T>(path: string, method: string = 'GET', body?: unknown): Promise<T> {

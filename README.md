@@ -5,6 +5,7 @@
 - **Docker 端**：镜像 `agent-memory`，FastAPI + PostgreSQL(pgvector) + ONNX Runtime，提供增/删/改/查/语义检索/压缩，附带 Web 管理台（根路径 `/`，`/web` 仍可用）。
 - **Agent 端插件**：OpenCode V2 插件 `@ifeng369/agent-memory-plugin`（GitHub Packages），注册 `memory_remember` / `memory_recall` / `memory_forget`，自动召回与会话空闲后总结对话；`src/client.ts` 可作其它 Agent 的 TS 客户端。
 - **跨 Agent 共享**：同一 `project_id` 下记忆对所有 Agent 可见。项目 ID 默认取 git remote URL（无 remote 用目录名）。
+- **全局记忆**：在对话里说“全局记忆”把当前会话切到 `global` 作用域，记忆工具与自动总结都写入全局项目，所有项目可见；说“退出全局记忆”切回当前项目。Web 左侧也有「全局记忆」入口。
 
 ## 启动服务端
 

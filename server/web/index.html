@@ -60,6 +60,7 @@
   </div>
   <div v-else class="main">
     <aside class="sidebar no-print">
+      <t-button size="small" variant="text" :theme="cfg.projectId === 'global' ? 'primary' : 'default'" class="project-btn" @click="selectProject('global')">全局记忆</t-button>
       <div class="sidebar-title">项目</div>
       <div v-if="projects.length">
         <t-button v-for="p in projects" :key="p" size="small" variant="text" :theme="cfg.projectId === p ? 'primary' : 'default'" class="project-btn" @click="selectProject(p)">{{ p }}</t-button>
@@ -69,10 +70,6 @@
     <div class="content">
   <t-tabs v-model="tab">
     <t-tab-panel value="memories" label="记忆管理">
-      <div class="toolbar no-print">
-        <t-button theme="primary" @click="openAdd">添加记忆</t-button>
-      </div>
-
       <t-card title="语义检索" class="no-print">
         <div class="form-grid">
           <div class="field"><label>查询</label><t-input v-model="search.query" @enter="doSearch" placeholder="自然语言问题或关键词" /></div>
@@ -84,7 +81,8 @@
           </div>
         </div>
         <div class="toolbar">
-          <t-button theme="primary" @click="doSearch">检索</t-button>
+          <t-button theme="primary" @click="openAdd">添加记忆</t-button>
+          <t-button theme="primary" variant="outline" @click="doSearch">检索</t-button>
           <t-button variant="outline" @click="loadMemories">列出全部</t-button>
           <t-button variant="outline" @click="reloadAll">刷新全部</t-button>
         </div>
@@ -201,7 +199,7 @@
           for (let offset = 0; ; offset += 100) {
             const r = await api('/api/v1/memories?limit=100&offset=' + offset, {}, false);
             const batch = r.data || [];
-            batch.forEach(m => { const p = m.metadata && m.metadata.project_id; if (p) found.push(p); });
+            batch.forEach(m => { const p = m.metadata && m.metadata.project_id; if (p && p !== 'global') found.push(p); });
             if (batch.length < 100) break;
           }
           projects.value = Array.from(new Set(found)).sort();

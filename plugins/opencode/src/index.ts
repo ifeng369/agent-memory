@@ -13,6 +13,7 @@ import { MemoryClient } from "./client"
 
 const IDLE_DEBOUNCE_MS = 8000
 const CAPTURE_BUDGET = 14000
+const GLOBAL_PROJECT = "global"
 const DOC_FILES = [
   "README.md",
   "USAGE.md",
@@ -129,6 +130,13 @@ export default Plugin.define({
       agentId: pick("agentId", "MEMORY_AGENT_ID") ?? "opencode",
     })
 
+    // 对话里说“全局记忆”把该会话切到 global 项目；说“退出全局记忆”切回当前项目
+    const globalSessions = new Set<string>()
+    const scopedClient = (sessionID: string) => {
+      const scoped = client.withSession(sessionID)
+      return globalSessions.has(sessionID) ? scoped.withProject(GLOBAL_PROJECT) : scoped
+    }
+
     // 会话首次 prompt 时生成项目使用说明 + 知识库摘要（upsert，不重复堆积）
     const docsDone = new Set<string>()
     const ensureDocs = async (sessionID: string) => {
@@ -178,31 +186,42 @@ export default Plugin.define({
     const recalls = new Map<string, { text: string; lines: string[] }>()
     await ctx.session.hook("context", async (event) => {
       try {
+        const global = globalSessions.has(event.sessionID)
+        const cacheKey = `${event.sessionID}:${global ? "global" : "project"}`
         const text = lastUserText(event.messages)
+        if (global) {
+          event.system.push({
+            type: "text",
+            text: "<memory-mode>当前为全局记忆模式：记忆工具与自动总结作用于 global 项目，所有项目可见。说“退出全局记忆”切回当前项目。</memory-mode>",
+          })
+        }
         if (!text) return
-        const cached = recalls.get(event.sessionID)
+        const cached = recalls.get(cacheKey)
         let lines = cached?.text === text ? cached.lines : undefined
         if (!lines) {
-          const hits = await client.withSession(event.sessionID).search(text, { limit: 5, threshold: 0.5 })
+          const hits = await scopedClient(event.sessionID).search(text, { limit: 5, threshold: 0.5 })
           lines = hits.map((hit) => `- ${hit.content}`)
-          recalls.set(event.sessionID, { text, lines })
+          recalls.set(cacheKey, { text, lines })
         }
         if (lines.length === 0) return
         event.system.push({
           type: "text",
           text: [
             "<memory>",
-            "同项目历史会话与其他 Agent 沉淀的相关记忆（仅供参考）：",
+            global ? "全局记忆（仅供参考）：" : "同项目历史会话与其他 Agent 沉淀的相关记忆（仅供参考）：",
             ...lines,
             "</memory>",
           ].join("\n"),
         })
-      } catch {
-        // 记忆服务不可用时静默降级
+      } catch (e) {
+        console.error("[agent-memory] recall failed", e)
       }
     })
 
     await ctx.session.hook("prompt", async (event) => {
+      const text = event.prompt.text
+      if (text.includes("退出全局记忆") || text.includes("切回项目记忆")) globalSessions.delete(event.sessionID)
+      else if (text.includes("全局记忆")) globalSessions.add(event.sessionID)
       await ensureDocs(event.sessionID)
     })
 
@@ -219,11 +238,11 @@ export default Plugin.define({
         const { text } = await ctx.experimental.generate.text({ prompt: buildCapturePrompt(evidence) })
         const content = String(text || "").trim()
         if (!content || content === "SKIP") return
-        const scoped = client.withSession(sessionID)
+        const scoped = scopedClient(sessionID)
         const input = {
           content: clip(content, 4000),
           type: "long_term" as const,
-          tags: ["auto"],
+          tags: globalSessions.has(sessionID) ? ["auto", "global"] : ["auto"],
           metadata: { source: "auto" },
         }
         const hits = await scoped.search(input.content, { limit: 3, threshold: 0.85 })
@@ -256,12 +275,12 @@ export default Plugin.define({
     await ctx.tool.transform((editor) => {
       editor.namespace({
         name: "memory",
-        description: "跨会话、跨 Agent 共享的长期记忆：记住事实、检索相关记忆、删除记忆",
+        description: "跨会话、跨 Agent 共享的长期记忆；在对话里说“全局记忆”可切换到 global 项目，说“退出全局记忆”切回当前项目",
       })
 
       editor.add({
         name: "remember",
-        description: "把一条值得长期保留的信息写入当前项目共享记忆库（用户偏好、项目约定、决定与原因等）。内容相同不会重复写入。",
+        description: "把一条值得长期保留的信息写入当前作用域的记忆库（说“全局记忆”则写 global 项目，所有项目可见）。内容相同不会重复写入。",
         input: {
           type: "object",
           properties: {
@@ -284,7 +303,7 @@ export default Plugin.define({
               tags?: string[]
               expiresAt?: string
             }
-            const memory = await client.withSession(context.sessionID).add(value)
+            const memory = await scopedClient(context.sessionID).add(value)
             return { content: `已记住 [${memory.id}]: ${memory.content}` }
           } catch (error) {
             return { content: `记忆写入失败: ${(error as Error).message}` }
@@ -294,7 +313,7 @@ export default Plugin.define({
 
       editor.add({
         name: "recall",
-        description: "按语义相似度检索当前项目共享记忆，含其他 Agent 写入的内容。",
+        description: "按语义相似度检索当前作用域的记忆（全局模式下检索 global 项目），含其他 Agent 写入的内容。",
         input: {
           type: "object",
           properties: {
@@ -310,7 +329,7 @@ export default Plugin.define({
         execute: async (input, context) => {
           try {
             const value = input as { query: string; limit?: number; threshold?: number; type?: string }
-            const results = await client.withSession(context.sessionID).search(value.query, {
+            const results = await scopedClient(context.sessionID).search(value.query, {
               limit: value.limit,
               threshold: value.threshold,
               type: value.type as any,
@@ -342,7 +361,7 @@ export default Plugin.define({
         execute: async (input, context) => {
           try {
             const { id } = input as { id: string }
-            await client.withSession(context.sessionID).delete(id)
+            await scopedClient(context.sessionID).delete(id)
             return { content: `已删除记忆 ${id}` }
           } catch (error) {
             return { content: `记忆删除失败: ${(error as Error).message}` }
