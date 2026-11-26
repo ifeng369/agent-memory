@@ -4,6 +4,7 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
 import time
@@ -81,7 +82,7 @@ async def log_requests(request: Request, call_next):
 @app.middleware("http")
 async def authenticate(request: Request, call_next):
     # 跳过健康检查和文档
-    if request.url.path in ["/api/health", "/docs", "/redoc", "/openapi.json", "/web"]:
+    if request.url.path in ["/api/health", "/docs", "/redoc", "/openapi.json", "/web"] or request.url.path.startswith("/vendor/"):
         return await call_next(request)
     
     # 获取 API Key
@@ -137,6 +138,7 @@ async def health_check():
 
 # Web 管理台（根路径与 /web 均返回同一页面）
 WEB_INDEX = Path(__file__).parent.parent / "web" / "index.html"
+app.mount("/vendor", StaticFiles(directory=str(WEB_INDEX.parent / "vendor")), name="vendor")
 
 
 @app.get("/", include_in_schema=False)
