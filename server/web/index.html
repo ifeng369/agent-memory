@@ -32,6 +32,7 @@
     .doc-body p { margin: 8px 0; }
     .doc-body pre { background: #f6f8fa; padding: 12px; border-radius: 4px; overflow-x: auto; }
     .empty { color: #999; padding: 24px; text-align: center; }
+    .gate { max-width: 420px; margin: 60px auto; }
     @media print {
       body * { visibility: hidden !important; }
       #docs-print, #docs-print * { visibility: visible !important; }
@@ -46,7 +47,18 @@
   <h1 class="title">agent-memory 管理台</h1>
   <div class="subtitle">跨会话、跨 Agent 共享记忆 · 服务端 API：{{ cfg.apiBase }}</div>
 
-  <div class="main">
+  <div v-if="!unlocked" class="gate no-print">
+    <t-card title="访问验证">
+      <p>服务端已启用 API Key 鉴权，请输入密钥后使用。</p>
+      <div class="field">
+        <t-input v-model="gateKey" type="password" placeholder="API Key" @keyup.enter="unlock(false)" />
+      </div>
+      <div class="toolbar">
+        <t-button theme="primary" :loading="unlocking" @click="unlock(false)">解锁</t-button>
+      </div>
+    </t-card>
+  </div>
+  <div v-else class="main">
     <aside class="sidebar no-print">
       <div class="sidebar-title">项目</div>
       <div v-if="projects.length">
@@ -174,6 +186,9 @@
         agentId: 'web',
         sessionId: ''
       });
+      const unlocked = ref(false);
+      const gateKey = ref('');
+      const unlocking = ref(false);
       const tab = ref('memories');
       const form = reactive({ content: '', type: 'long_term', importance: 0.8, tags: '', expiresAt: '' });
       const search = reactive({ query: '', threshold: 0.5, limit: 20, agentId: '' });
@@ -228,9 +243,24 @@
       }
       async function testConnection() {
         try {
-          const r = await api('/api/health');
-          msg('success', '连接正常：' + (r.status || 'ok'));
-        } catch (e) { msg('error', '连接失败：' + e.message); }
+          await api('/api/v1/memories?limit=1');
+          msg('success', '连接正常，密钥有效');
+          return true;
+        } catch (e) { msg('error', '连接失败：' + e.message); return false; }
+      }
+      async function unlock(silent) {
+        cfg.apiKey = gateKey.value.trim() || cfg.apiKey;
+        if (!cfg.apiKey) { if (!silent) msg('warning', '请输入 API Key'); return; }
+        unlocking.value = true;
+        try {
+          await api('/api/v1/memories?limit=1');
+          unlocked.value = true;
+          localStorage.setItem('agent-memory-web', JSON.stringify(cfg));
+          reloadAll();
+          if (!silent) msg('success', '已解锁');
+        } catch (e) {
+          if (!silent) msg('error', '密钥无效：' + e.message);
+        } finally { unlocking.value = false; }
       }
       async function loadMemories() {
         try {
@@ -297,9 +327,10 @@
           const saved = JSON.parse(localStorage.getItem('agent-memory-web') || 'null');
           if (saved) Object.assign(cfg, saved);
         } catch (e) {}
-        reloadAll();
+        gateKey.value = cfg.apiKey;
+        if (cfg.apiKey) unlock(true);
       });
-      return { cfg, tab, form, search, memories, docs, docId, currentDoc, resultTitle, projects, saveConfig, testConnection, loadMemories, doSearch, addMemory, deleteMemory, loadDocs, loadProjects, selectProject, exportPdf, renderMarkdown, reloadAll };
+      return { cfg, unlocked, gateKey, unlocking, unlock, tab, form, search, memories, docs, docId, currentDoc, resultTitle, projects, saveConfig, testConnection, loadMemories, doSearch, addMemory, deleteMemory, loadDocs, loadProjects, selectProject, exportPdf, renderMarkdown, reloadAll };
     }
   });
   components.forEach(name => {

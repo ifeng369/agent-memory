@@ -8,7 +8,7 @@ services:
       - "3000:3000"
     environment:
       - DATABASE_URL=postgresql+asyncpg://memory_user:memory_pass@db:5432/memory
-      - API_SECRET=${API_SECRET:-your-secret-key-change-in-production}
+      - API_SECRET=${API_SECRET:?请在 .env 中设置 API_SECRET}
       - MODEL_NAME=/app/models/agent-memory-onnx
       - BATCH_SIZE=32
       - OMP_NUM_THREADS=2

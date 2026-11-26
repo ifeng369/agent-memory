@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path
+import secrets
 import time
 import logging
 
@@ -78,23 +79,22 @@ async def log_requests(request: Request, call_next):
     return response
 
 
-# 认证中间件 (简化版)
+# 认证中间件：所有 API 请求必须带正确密钥；页面与静态资源公开
+PUBLIC_PATHS = {"/", "/web", "/api/health", "/docs", "/redoc", "/openapi.json"}
+
+
 @app.middleware("http")
 async def authenticate(request: Request, call_next):
-    # 跳过健康检查和文档
-    if request.url.path in ["/api/health", "/docs", "/redoc", "/openapi.json", "/web"] or request.url.path.startswith("/vendor/"):
+    if request.url.path in PUBLIC_PATHS or request.url.path.startswith("/vendor/"):
         return await call_next(request)
-    
-    # 获取 API Key
-    api_key = request.headers.get("X-API-Key") or request.headers.get("Authorization", "").replace("Bearer ", "")
-    
-    # 使用默认占位密钥时放行本地开发；换成真实密钥后强制校验
-    if settings.API_SECRET != "your-secret-key-change-in-production" and api_key != settings.API_SECRET:
+
+    api_key = request.headers.get("X-API-Key") or request.headers.get("Authorization", "").removeprefix("Bearer ")
+    if not secrets.compare_digest(api_key or "", settings.API_SECRET):
         return JSONResponse(
             status_code=401,
             content={"success": False, "error": "Invalid API Key"}
         )
-    
+
     return await call_next(request)
 
 
