@@ -19,7 +19,7 @@ curl http://localhost:3000/api/health
 
 镜像与模型：
 
-- 仅支持 ONNX，无 PyTorch 回退。镜像构建分两阶段：builder 安装 CPU 版 torch 导出 `BAAI/bge-small-zh-v1.5` 到 `/app/models/agent-memory-onnx`，runtime 只装 ONNX 相关依赖并复制模型，因此无需运行时下载、体积从约 2.5G 降到约 0.6G。
+- 仅支持 ONNX，无 PyTorch 回退。镜像构建分两阶段：builder 安装 CPU 版 torch 导出 `BAAI/bge-small-zh-v1.5` 到 `/app/models/agent-memory-onnx`，runtime 只装 ONNX 相关依赖并复制模型，因此无需运行时下载、体积从约 2.5G 降到约 920MB。
 - 国内构建用 `HF_ENDPOINT=https://hf-mirror.com`（compose build arg / workflow build-arg 已设）。
 - 运行时环境变量：`DATABASE_URL`（必须 `postgresql+asyncpg://...`）、`API_SECRET`、`MODEL_NAME`（默认 `/app/models/agent-memory-onnx`）、`BATCH_SIZE`、`OMP_NUM_THREADS`。
 
