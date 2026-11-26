@@ -135,21 +135,18 @@ async def health_check():
     }
 
 
-# Web 管理台
-@app.get("/web", include_in_schema=False)
+# Web 管理台（根路径与 /web 均返回同一页面）
+WEB_INDEX = Path(__file__).parent.parent / "web" / "index.html"
+
+
+@app.get("/", include_in_schema=False)
 async def web_ui():
-    return FileResponse(Path(__file__).parent.parent / "web" / "index.html")
+    return FileResponse(WEB_INDEX)
 
 
-# API 信息
-@app.get("/")
-async def root():
-    return {
-        "name": settings.APP_NAME,
-        "version": settings.APP_VERSION,
-        "docs": "/docs",
-        "health": "/api/health"
-    }
+@app.get("/web", include_in_schema=False)
+async def web_ui_alias():
+    return FileResponse(WEB_INDEX)
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 供 OpenCode 及其他 Agent 使用的跨会话记忆服务。
 
-- **Docker 端**：镜像 `agent-memory`，FastAPI + PostgreSQL(pgvector) + ONNX Runtime，提供增/删/改/查/语义检索/压缩，附带 Web 管理台（`/web`）。
+- **Docker 端**：镜像 `agent-memory`，FastAPI + PostgreSQL(pgvector) + ONNX Runtime，提供增/删/改/查/语义检索/压缩，附带 Web 管理台（根路径 `/`，`/web` 仍可用）。
 - **Agent 端插件**：OpenCode V2 插件 `@ifeng369/agent-memory-plugin`（GitHub Packages），注册 `memory_remember` / `memory_recall` / `memory_forget`，自动召回与每 3 条消息抽取；`src/client.ts` 可作其它 Agent 的 TS 客户端。
 - **跨 Agent 共享**：同一 `project_id` 下记忆对所有 Agent 可见。项目 ID 默认取 git remote URL（无 remote 用目录名）。
 
@@ -13,7 +13,7 @@ cd agent-memory
 docker compose pull agent-memory
 docker compose up -d
 curl http://localhost:3000/api/health
-# Web 管理台：http://localhost:3000/web
+# Web 管理台：http://localhost:3000/
 ```
 
 端口 `3000`，API 前缀 `/api/v1`，鉴权用 `X-API-Key`（默认占位密钥见 `docker-compose.yml`，生产务必替换）。使用默认占位密钥时不校验；换成真实值后所有接口（除健康检查/文档/Web 页面）都必须带 `X-API-Key`。
