@@ -41,13 +41,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: HF_ENDPOINT=https://huggingface.co
 
-      # 私有仓库推出来的包默认是私有，尝试设为公开；失败可在 GHCR 页面手动改
-      - name: Make GHCR package public
-        continue-on-error: true
-        run: gh api -X PATCH /user/packages/container/agent-memory -f visibility=public
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   npm:
     runs-on: ubuntu-latest
     steps:
@@ -75,9 +68,3 @@ jobs:
           else
             npm publish
           fi
-
-      - name: Make npm package public
-        continue-on-error: true
-        run: gh api -X PATCH /user/packages/npm/agent-memory-plugin -f visibility=public
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

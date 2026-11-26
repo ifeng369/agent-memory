@@ -1,146 +1,304 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>agent-memory 管理台</title>
-<style>
-  body{font:14px system-ui;margin:24px;max-width:1100px;color:#222}
-  fieldset{border:1px solid #ddd;border-radius:8px;margin-bottom:16px;padding:12px}
-  legend{font-weight:600}
-  label{display:inline-block;margin:4px 8px 4px 0}
-  input,select,textarea{font:inherit;padding:5px;border:1px solid #ccc;border-radius:4px}
-  textarea{width:100%;min-height:60px;box-sizing:border-box}
-  button{font:inherit;padding:6px 14px;cursor:pointer}
-  pre{background:#f6f6f6;padding:12px;border-radius:6px;white-space:pre-wrap;word-break:break-all;min-height:80px}
-  .row{margin:4px 0}
-  .hidden{display:none}
-  .tabs button{margin-right:6px}
-  .toolbar{margin-bottom:12px}
-  .doclayout{display:flex;gap:18px;align-items:flex-start}
-  #docNav{width:190px;flex:none;border-right:1px solid #ddd;padding-right:10px}
-  #docNav button{display:block;width:100%;text-align:left;margin-bottom:6px;border:1px solid #ddd;background:#fafafa}
-  #docBody{flex:1;min-height:400px;padding:18px;border:1px solid #eee;border-radius:8px;background:#fff;line-height:1.7}
-  #docBody h1,#docBody h2,#docBody h3{line-height:1.3}
-  #docBody pre{white-space:pre-wrap}
-  @media print{
-    body{margin:0;max-width:none}
-    .tabs,#admin,.toolbar,#docNav{display:none!important}
-    #docs{display:block!important}
-    .doclayout{display:block}
-    #docBody{border:0;padding:0;font-size:12pt}
-  }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>agent-memory 管理台</title>
+  <link rel="stylesheet" href="vendor/reset.css" />
+  <link rel="stylesheet" href="vendor/tdesign.min.css" />
+  <style>
+    [v-cloak] { display: none; }
+    body { background: #f5f7fa; margin: 0; }
+    .layout { max-width: 1400px; margin: 0 auto; padding: 24px 16px 60px; }
+    .main { display: flex; gap: 16px; align-items: flex-start; }
+    .sidebar { width: 200px; flex: 0 0 200px; background: #fff; border: 1px solid #e7e7e7; border-radius: 6px; padding: 12px; }
+    .sidebar-title { font-size: 13px; font-weight: 600; color: #333; margin-bottom: 8px; }
+    .content { flex: 1; min-width: 0; }
+    .project-btn { width: 100%; text-align: left; margin-bottom: 4px; }
+    .title { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+    .subtitle { color: #666; font-size: 13px; margin-bottom: 16px; }
+    .t-card { margin-bottom: 16px; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field label { font-size: 12px; color: #555; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .mem-item { padding: 8px 0; border-bottom: 1px solid #eee; }
+    .mem-content { white-space: pre-wrap; word-break: break-word; line-height: 1.6; }
+    .mem-meta { color: #888; font-size: 12px; margin-top: 6px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .doc-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .doc-body { background: #fff; border: 1px solid #e7e7e7; border-radius: 6px; padding: 24px; line-height: 1.75; }
+    .doc-body h1 { font-size: 24px; margin: 0 0 16px; }
+    .doc-body h2 { font-size: 18px; margin: 20px 0 8px; }
+    .doc-body p { margin: 8px 0; }
+    .doc-body pre { background: #f6f8fa; padding: 12px; border-radius: 4px; overflow-x: auto; }
+    .empty { color: #999; padding: 24px; text-align: center; }
+    @media print {
+      body * { visibility: hidden !important; }
+      #docs-print, #docs-print * { visibility: visible !important; }
+      #docs-print { position: absolute; left: 0; top: 0; width: 100%; }
+      .no-print, .t-tabs__nav, .t-card__header { display: none !important; }
+      .doc-body { border: none; padding: 0; }
+    }
+  </style>
 </head>
 <body>
-<h1>agent-memory</h1>
-<div class="tabs">
-  <button id="tabAdmin" onclick="view('admin')">管理台</button>
-  <button id="tabDocs" onclick="view('docs')">文档 / 知识库</button>
+<div id="app" v-cloak class="layout">
+  <h1 class="title">agent-memory 管理台</h1>
+  <div class="subtitle">跨会话、跨 Agent 共享记忆 · 服务端 API：{{ cfg.apiBase }}</div>
+
+  <div class="main">
+    <aside class="sidebar no-print">
+      <div class="sidebar-title">项目</div>
+      <div v-if="projects.length">
+        <t-button v-for="p in projects" :key="p" size="small" variant="text" :theme="cfg.projectId === p ? 'primary' : 'default'" class="project-btn" @click="selectProject(p)">{{ p }}</t-button>
+      </div>
+      <div v-else class="empty">暂无项目</div>
+    </aside>
+    <div class="content">
+  <t-card title="连接配置" class="no-print">
+    <div class="form-grid">
+      <div class="field"><label>API 地址</label><t-input v-model="cfg.apiBase" placeholder="http://localhost:3000" /></div>
+      <div class="field"><label>API Key</label><t-input v-model="cfg.apiKey" type="password" placeholder="X-API-Key" /></div>
+      <div class="field"><label>项目 ID</label><t-input v-model="cfg.projectId" placeholder="默认 default" /></div>
+      <div class="field"><label>Agent ID</label><t-input v-model="cfg.agentId" placeholder="web" /></div>
+      <div class="field"><label>Session ID</label><t-input v-model="cfg.sessionId" placeholder="可选" /></div>
+    </div>
+    <div class="toolbar">
+      <t-button theme="primary" @click="saveConfig">保存配置</t-button>
+      <t-button variant="outline" @click="testConnection">测试连接</t-button>
+      <t-button variant="outline" @click="reloadAll">刷新全部</t-button>
+    </div>
+  </t-card>
+
+  <t-tabs v-model="tab">
+    <t-tab-panel value="memories" label="记忆管理">
+      <t-card title="写入记忆" class="no-print">
+        <div class="form-grid">
+          <div class="field" style="grid-column: 1 / -1;">
+            <label>内容</label>
+            <t-textarea v-model="form.content" :autosize="{ minRows: 2, maxRows: 6 }" placeholder="要长期记住的事实、偏好或约定" />
+          </div>
+          <div class="field">
+            <label>类型</label>
+            <t-select v-model="form.type">
+              <t-option value="long_term" label="long_term" />
+              <t-option value="short_term" label="short_term" />
+              <t-option value="semantic" label="semantic" />
+              <t-option value="episodic" label="episodic" />
+              <t-option value="working" label="working" />
+            </t-select>
+          </div>
+          <div class="field"><label>重要性 0-1</label><t-input-number v-model="form.importance" :min="0" :max="1" :step="0.1" /></div>
+          <div class="field"><label>标签（逗号分隔）</label><t-input v-model="form.tags" placeholder="preference, test" /></div>
+          <div class="field"><label>过期时间（ISO，可选）</label><t-input v-model="form.expiresAt" placeholder="2027-01-01T00:00:00Z" /></div>
+        </div>
+        <div class="toolbar"><t-button theme="primary" @click="addMemory">添加记忆</t-button></div>
+      </t-card>
+
+      <t-card title="语义检索" class="no-print">
+        <div class="form-grid">
+          <div class="field"><label>查询</label><t-input v-model="search.query" @enter="doSearch" placeholder="自然语言问题或关键词" /></div>
+          <div class="field"><label>阈值</label><t-input-number v-model="search.threshold" :min="0" :max="1" :step="0.05" /></div>
+          <div class="field"><label>条数</label><t-input-number v-model="search.limit" :min="1" :max="100" /></div>
+          <div class="field">
+            <label>只看 Agent</label>
+            <t-input v-model="search.agentId" placeholder="留空=全部" />
+          </div>
+        </div>
+        <div class="toolbar">
+          <t-button theme="primary" @click="doSearch">检索</t-button>
+          <t-button variant="outline" @click="loadMemories">列出全部</t-button>
+        </div>
+      </t-card>
+
+      <t-card :title="resultTitle">
+        <t-list v-if="memories.length" :split="true">
+          <t-list-item v-for="m in memories" :key="m.id">
+            <t-list-item-meta>
+              <template #description>
+                <div class="mem-content">{{ m.content }}</div>
+                <div class="mem-meta">
+                  <t-tag size="small" theme="primary" variant="light">{{ m.type }}</t-tag>
+                  <t-tag v-for="t in m.tags || []" :key="t" size="small" variant="outline">{{ t.name || t }}</t-tag>
+                  <span>ID {{ m.id }}</span>
+                  <span v-if="m.metadata && m.metadata.agent_id">Agent {{ m.metadata.agent_id }}</span>
+                  <span v-if="m.similarity">相似度 {{ Number(m.similarity).toFixed(2) }}</span>
+                </div>
+              </template>
+            </t-list-item-meta>
+            <template #action>
+              <t-button size="small" variant="text" theme="danger" class="no-print" @click="deleteMemory(m)">删除</t-button>
+            </template>
+          </t-list-item>
+        </t-list>
+        <div v-else class="empty">暂无记忆</div>
+      </t-card>
+    </t-tab-panel>
+
+    <t-tab-panel value="docs" label="文档 / 知识库">
+      <div class="no-print">
+        <t-card title="项目文档" class="no-print">
+          <div class="doc-list">
+            <t-button v-for="d in docs" :key="d.id" variant="outline" :theme="docId === d.id ? 'primary' : 'default'" @click="docId = d.id">
+              {{ d.metadata && d.metadata.kind === 'usage' ? '使用说明' : '知识库' }} · {{ d.created_at }}
+            </t-button>
+            <t-button v-if="docs.length" theme="primary" @click="exportPdf">导出 PDF</t-button>
+          </div>
+          <div class="toolbar"><t-button variant="outline" @click="loadDocs">刷新文档</t-button></div>
+        </t-card>
+      </div>
+      <div id="docs-print">
+        <div v-if="currentDoc" class="doc-body" v-html="renderMarkdown(currentDoc.content)"></div>
+        <div v-else class="empty">暂无项目文档，开发者会话首次提问时会自动生成。</div>
+      </div>
+    </t-tab-panel>
+  </t-tabs>
+    </div>
+  </div>
 </div>
 
-<section id="admin">
-  <fieldset><legend>连接与作用范围</legend>
-    <label>API <input id="base" value="/api/v1" size="30"></label>
-    <label>Key <input id="key" placeholder="留空则使用默认密钥" size="20"></label>
-    <label>项目 <input id="project" value="memory" size="18"></label>
-    <label>Agent <input id="agent" value="web" size="14"></label>
-    <label>会话 <input id="session" value="web-ui" size="14"></label>
-  </fieldset>
-  <fieldset><legend>写入记忆</legend>
-    <textarea id="content" placeholder="要记住的内容"></textarea>
-    <div class="row">
-      <label>类型 <select id="type"><option>long_term</option><option>short_term</option><option>working</option><option>semantic</option><option>episodic</option></select></label>
-      <label>重要性 <input id="importance" type="number" value="0.5" min="0" max="1" step="0.1"></label>
-      <label>标签(逗号分隔) <input id="tags" size="24"></label>
-      <button onclick="add()">添加</button>
-    </div>
-  </fieldset>
-  <fieldset><legend>检索与列表</legend>
-    <label>查询 <input id="query" size="34"></label>
-    <label>阈值 <input id="threshold" type="number" value="0.5" min="0" max="1" step="0.1"></label>
-    <label>条数 <input id="limit" type="number" value="10" min="1"></label>
-    <button onclick="search()">语义检索</button>
-    <button onclick="list()">列出本页</button>
-    <label>删除 ID <input id="deleteId" size="28"></label>
-    <button onclick="del()">删除</button>
-  </fieldset>
-  <pre id="out">就绪。</pre>
-</section>
-
-<section id="docs" class="hidden">
-  <div class="toolbar">
-    <button onclick="loadDocs()">刷新文档</button>
-    <button onclick="window.print()">导出 PDF</button>
-    <span>文档由插件在会话首次 prompt 时生成，文件变化后新会话自动更新。</span>
-  </div>
-  <div class="doclayout">
-    <nav id="docNav"></nav>
-    <article id="docBody">加载中…</article>
-  </div>
-</section>
-
+<script src="vendor/vue.global.prod.js"></script>
+<script src="vendor/tdesign.min.js"></script>
 <script>
-const $ = id => document.getElementById(id);
-const out = v => { $("out").textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2); };
-function view(name) {
-  const docs = name === "docs";
-  $("admin").classList.toggle("hidden", docs);
-  $("docs").classList.toggle("hidden", !docs);
-  $("tabAdmin").disabled = docs;
-  $("tabDocs").disabled = !docs;
-  if (docs) loadDocs();
-}
-function headers() {
-  const h = { "Content-Type": "application/json", "X-Project-Id": $("project").value,
-    "X-Agent-Id": $("agent").value, "X-Session-Id": $("session").value };
-  if ($("key").value) h["X-API-Key"] = $("key").value;
-  return h;
-}
-async function call(method, path, body) {
-  try {
-    const r = await fetch($("base").value + path, { method, headers: headers(), body: body ? JSON.stringify(body) : undefined });
-    out(await r.json());
-  } catch (e) { out("请求失败: " + e.message); }
-}
-function add() {
-  const tags = $("tags").value.split(",").map(s => s.trim()).filter(Boolean);
-  call("POST", "/memories", { content: $("content").value, type: $("type").value,
-    importance: Number($("importance").value), tags });
-}
-function search() {
-  const q = encodeURIComponent($("query").value);
-  call("POST", `/memories/search?query=${q}&threshold=${$("threshold").value}&limit=${$("limit").value}`);
-}
-function list() { call("GET", `/memories?limit=${$("limit").value}`); }
-function del() { call("DELETE", "/memories/" + encodeURIComponent($("deleteId").value)); }
+(function () {
+  const { createApp, ref, reactive, computed, onMounted } = Vue;
+  const components = ['Button','Card','Input','Textarea','Select','Option','InputNumber','Tag','Tabs','TabPanel','List','ListItem','ListItemMeta','Checkbox','Switch','Dialog','DialogCard','InputAdornment','InputGroup','Table','TagInput'];
+  const kebab = s => 't-' + s.replace(/[A-Z]/g, m => '-' + m.toLowerCase()).replace(/^-/, '');
 
-let docs = [];
-function esc(s) { return String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
-function md(s) {
-  return esc(s).split("\n").map(line => {
-    if (line.startsWith("### ")) return `<h3>${line.slice(4)}</h3>`;
-    if (line.startsWith("## ")) return `<h2>${line.slice(3)}</h2>`;
-    if (line.startsWith("# ")) return `<h1>${line.slice(2)}</h1>`;
-    if (line.startsWith("- ")) return `<li>${line.slice(2)}</li>`;
-    if (!line.trim()) return "<br>";
-    return `<p>${line}</p>`;
-  }).join("");
-}
-function renderDoc(doc) {
-  $("docBody").innerHTML = `<h2>${doc.metadata?.kind === "usage" ? "使用说明" : "知识库"}</h2>` + md(doc.content);
-}
-async function loadDocs() {
-  try {
-    const r = await fetch($("base").value + "/memories?type=semantic&limit=100", { headers: headers() });
-    const j = await r.json();
-    docs = (j.data || []).filter(m => ["usage", "kb"].includes(m.metadata && m.metadata.kind));
-    $("docNav").innerHTML = docs.map((d, i) =>
-      `<button onclick="renderDoc(docs[${i}])">${d.metadata?.kind === "usage" ? "使用说明" : "知识库摘要"}</button>`).join("");
-    if (docs.length) renderDoc(docs[0]);
-    else $("docBody").innerHTML = "<p>暂无文档。插件会在会话首次 prompt 时自动生成。</p>";
-  } catch (e) { $("docBody").textContent = "加载失败: " + e.message; }
-}
+  const app = createApp({
+    setup() {
+      const cfg = reactive({
+        apiBase: location.origin,
+        apiKey: '',
+        projectId: 'default',
+        agentId: 'web',
+        sessionId: ''
+      });
+      const tab = ref('memories');
+      const form = reactive({ content: '', type: 'long_term', importance: 0.8, tags: '', expiresAt: '' });
+      const search = reactive({ query: '', threshold: 0.5, limit: 20, agentId: '' });
+      const memories = ref([]);
+      const docs = ref([]);
+      const docId = ref('');
+      const resultTitle = ref('记忆列表');
+      const currentDoc = computed(() => docs.value.find(d => d.id === docId.value) || docs.value[0] || null);
+      const projects = ref([]);
+      async function loadProjects() {
+        try {
+          const r = await api('/api/v1/memories?limit=1000', {}, false);
+          projects.value = Array.from(new Set((r.data || []).map(m => m.metadata && m.metadata.project_id).filter(Boolean))).sort();
+        } catch (e) { msg('error', e.message); }
+      }
+      function selectProject(p) { cfg.projectId = p; saveConfig(); reloadAll(); }
+
+      function headers(includeProject = true) {
+        const h = { 'Content-Type': 'application/json' };
+        if (cfg.apiKey) h['X-API-Key'] = cfg.apiKey;
+        if (includeProject && cfg.projectId) h['X-Project-Id'] = cfg.projectId;
+        if (cfg.agentId) h['X-Agent-Id'] = cfg.agentId;
+        if (cfg.sessionId) h['X-Session-Id'] = cfg.sessionId;
+        return h;
+      }
+      async function api(path, options = {}, includeProject = true) {
+        const res = await fetch(cfg.apiBase.replace(/\/$/, '') + path, { ...options, headers: { ...headers(includeProject), ...(options.headers || {}) } });
+        const text = await res.text();
+        let data; try { data = JSON.parse(text); } catch (e) { data = text; }
+        if (!res.ok) throw new Error((data && data.detail) || ('HTTP ' + res.status));
+        return data;
+      }
+      function msg(type, text) {
+        const fn = TDesign.MessagePlugin[type];
+        if (fn) fn(text); else console.log(type, text);
+      }
+      function parseTags(s) {
+        return String(s || '').split(',').map(x => x.trim()).filter(Boolean);
+      }
+      function saveConfig() {
+        localStorage.setItem('agent-memory-web', JSON.stringify(cfg));
+        msg('success', '配置已保存');
+      }
+      async function testConnection() {
+        try {
+          const r = await api('/api/health');
+          msg('success', '连接正常：' + (r.status || 'ok'));
+        } catch (e) { msg('error', '连接失败：' + e.message); }
+      }
+      async function loadMemories() {
+        try {
+          const r = await api('/api/v1/memories?limit=100');
+          memories.value = r.data || [];
+          resultTitle.value = '记忆列表（' + memories.value.length + '）';
+        } catch (e) { msg('error', e.message); }
+      }
+      async function doSearch() {
+        try {
+          const q = new URLSearchParams({ query: search.query, threshold: String(search.threshold), limit: String(search.limit) });
+          if (search.agentId) q.set('agent_id', search.agentId);
+          const r = await api('/api/v1/memories/search?' + q.toString(), { method: 'POST' });
+          memories.value = r.data || [];
+          resultTitle.value = '检索结果（' + memories.value.length + '）';
+        } catch (e) { msg('error', e.message); }
+      }
+      async function addMemory() {
+        if (!form.content.trim()) { msg('warning', '请输入内容'); return; }
+        const body = { content: form.content, type: form.type, importance: Number(form.importance), tags: parseTags(form.tags) };
+        if (form.expiresAt) body.expires_at = form.expiresAt;
+        try {
+          await api('/api/v1/memories', { method: 'POST', body: JSON.stringify(body) });
+          form.content = '';
+          msg('success', '已写入');
+          await loadMemories();
+        } catch (e) { msg('error', e.message); }
+      }
+      function deleteMemory(m) {
+        TDesign.DialogPlugin.confirm({
+          header: '删除记忆',
+          body: '确定删除这条记忆吗？此操作不可撤销。',
+          onConfirm: async () => {
+            try { await api('/api/v1/memories/' + m.id, { method: 'DELETE' }); msg('success', '已删除'); await loadMemories(); }
+            catch (e) { msg('error', e.message); }
+          }
+        });
+      }
+      async function loadDocs() {
+        try {
+          const r = await api('/api/v1/memories?type=semantic&limit=100');
+          docs.value = (r.data || []).filter(m => m.metadata && (m.metadata.kind === 'usage' || m.metadata.kind === 'kb'));
+          if (!docId.value && docs.value.length) docId.value = docs.value[0].id;
+        } catch (e) { msg('error', e.message); }
+      }
+      function exportPdf() { window.print(); }
+      function escapeHtml(s) {
+        return String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+      }
+      function renderMarkdown(s) {
+        return String(s || '').split('\n').map(line => {
+          const t = escapeHtml(line.trimEnd());
+          if (t.startsWith('### ')) return '<h3>' + t.slice(4) + '</h3>';
+          if (t.startsWith('## ')) return '<h2>' + t.slice(3) + '</h2>';
+          if (t.startsWith('# ')) return '<h1>' + t.slice(2) + '</h1>';
+          if (t.startsWith('- ')) return '<p>• ' + t.slice(2) + '</p>';
+          if (!t) return '<p></p>';
+          return '<p>' + t + '</p>';
+        }).join('');
+      }
+      function reloadAll() { loadProjects(); loadMemories(); loadDocs(); }
+      onMounted(() => {
+        try {
+          const saved = JSON.parse(localStorage.getItem('agent-memory-web') || 'null');
+          if (saved) Object.assign(cfg, saved);
+        } catch (e) {}
+        reloadAll();
+      });
+      return { cfg, tab, form, search, memories, docs, docId, currentDoc, resultTitle, projects, saveConfig, testConnection, loadMemories, doSearch, addMemory, deleteMemory, loadDocs, loadProjects, selectProject, exportPdf, renderMarkdown, reloadAll };
+    }
+  });
+  components.forEach(name => {
+    const comp = TDesign[name];
+    if (comp) app.component(kebab(name), comp);
+  });
+  app.mount('#app');
+})();
 </script>
 </body>
 </html>
