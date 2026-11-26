@@ -185,8 +185,14 @@
       const projects = ref([]);
       async function loadProjects() {
         try {
-          const r = await api('/api/v1/memories?limit=1000', {}, false);
-          projects.value = Array.from(new Set((r.data || []).map(m => m.metadata && m.metadata.project_id).filter(Boolean))).sort();
+          const found = [];
+          for (let offset = 0; ; offset += 100) {
+            const r = await api('/api/v1/memories?limit=100&offset=' + offset, {}, false);
+            const batch = r.data || [];
+            batch.forEach(m => { const p = m.metadata && m.metadata.project_id; if (p) found.push(p); });
+            if (batch.length < 100) break;
+          }
+          projects.value = Array.from(new Set(found)).sort();
         } catch (e) { msg('error', e.message); }
       }
       function selectProject(p) { cfg.projectId = p; saveConfig(); reloadAll(); }
@@ -203,7 +209,10 @@
         const res = await fetch(cfg.apiBase.replace(/\/$/, '') + path, { ...options, headers: { ...headers(includeProject), ...(options.headers || {}) } });
         const text = await res.text();
         let data; try { data = JSON.parse(text); } catch (e) { data = text; }
-        if (!res.ok) throw new Error((data && data.detail) || ('HTTP ' + res.status));
+        if (!res.ok) {
+          const detail = data && data.detail;
+          throw new Error(typeof detail === 'string' ? detail : (detail ? JSON.stringify(detail) : ('HTTP ' + res.status)));
+        }
         return data;
       }
       function msg(type, text) {
