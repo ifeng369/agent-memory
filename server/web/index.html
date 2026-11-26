@@ -67,20 +67,9 @@
       <div v-else class="empty">暂无项目</div>
     </aside>
     <div class="content">
-  <t-card title="连接配置" class="no-print">
-    <div class="form-grid">
-      <div class="field"><label>API 地址</label><t-input v-model="cfg.apiBase" placeholder="http://localhost:3000" /></div>
-      <div class="field"><label>API Key</label><t-input v-model="cfg.apiKey" type="password" placeholder="X-API-Key" /></div>
-      <div class="field"><label>项目 ID</label><t-input v-model="cfg.projectId" placeholder="默认 default" /></div>
-      <div class="field"><label>Agent ID</label><t-input v-model="cfg.agentId" placeholder="web" /></div>
-      <div class="field"><label>Session ID</label><t-input v-model="cfg.sessionId" placeholder="可选" /></div>
-    </div>
-    <div class="toolbar">
-      <t-button theme="primary" @click="saveConfig">保存配置</t-button>
-      <t-button variant="outline" @click="testConnection">测试连接</t-button>
-      <t-button variant="outline" @click="reloadAll">刷新全部</t-button>
-    </div>
-  </t-card>
+  <div class="toolbar no-print">
+    <t-button variant="outline" @click="reloadAll">刷新全部</t-button>
+  </div>
 
   <t-tabs v-model="tab">
     <t-tab-panel value="memories" label="记忆管理">
@@ -239,7 +228,6 @@
       }
       function saveConfig() {
         localStorage.setItem('agent-memory-web', JSON.stringify(cfg));
-        msg('success', '配置已保存');
       }
       async function testConnection() {
         try {
