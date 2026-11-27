@@ -108,7 +108,7 @@ function partText(part: any): string {
 function buildCaptureEvidence(messages: readonly any[]): string {
   let start = -1
   for (let i = messages.length - 1; i >= 0; i--) {
-    const role = messages[i]?.info?.role ?? messages[i]?.role
+    const role = messages[i]?.info?.role ?? messages[i]?.role ?? messages[i]?.type
     if (role === "user") { start = i; break }
   }
   if (start < 0) return ""
@@ -117,11 +117,11 @@ function buildCaptureEvidence(messages: readonly any[]): string {
   let tools = 0
   for (let i = start; i < messages.length; i++) {
     const m = messages[i] as any
-    const role = m?.info?.role ?? m?.role
+    const role = m?.info?.role ?? m?.role ?? m?.type
     if (i > start && role === "user") break
-    const parts = m?.parts ?? m?.content ?? []
+    const parts = m?.content ?? m?.parts ?? []
     if (role === "user") {
-      const text = parts.map(partText).filter(Boolean).join("\n").trim()
+      const text = (parts.map(partText).filter(Boolean).join("\n") || String(m?.text ?? "")).trim()
       if (text) lines.push("## 用户请求\n" + clip(text, 2000))
       continue
     }
@@ -182,6 +182,14 @@ export default Plugin.define({
       const scoped = client.withSession(sessionID)
       return globalSessions.has(sessionID) ? scoped.withProject(GLOBAL_PROJECT) : scoped
     }
+    const currentModel = async () => {
+      try {
+        const m: any = await ctx.model.default()
+        return m ? { providerID: m.providerID, id: m.id ?? m.modelID } : undefined
+      } catch {
+        return undefined
+      }
+    }
 
     // 会话首次 prompt 时生成项目使用说明 + 知识库摘要（upsert，不重复堆积）
     const docsDone = new Set<string>()
@@ -203,6 +211,7 @@ export default Plugin.define({
         }
         const blocks = files.map((file) => `### ${file}\n${clip(readFileSync(file, "utf8"), docs.length ? 20000 : 6000)}`)
         const { text } = await ctx.experimental.generate.text({
+          model: await currentModel(),
           prompt: [
             "基于下面的项目文件生成两份中文文档，供团队在开发时参考。",
             "文件可能只有源码; 只写能从文件中确认的内容，不要编造功能。",
@@ -289,7 +298,7 @@ export default Plugin.define({
         const messages: any[] = await ctx.session.context({ sessionID })
         const evidence = buildCaptureEvidence(messages)
         if (evidence.length < 40) return
-        const { text } = await ctx.experimental.generate.text({ prompt: buildCapturePrompt(evidence) })
+        const { text } = await ctx.experimental.generate.text({ model: await currentModel(), prompt: buildCapturePrompt(evidence) })
         const content = String(text || "").trim()
         if (!content || content === "SKIP") return
         const scoped = scopedClient(sessionID)
