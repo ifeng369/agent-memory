@@ -340,7 +340,8 @@
       function renderMarkdown(s) {
         const out = [];
         let inFence = false, lang = '', code = [];
-        const inline = t => t.replace(/`([^`]+)`/g, (_, c) => '<code>' + c + '</code>');
+        const inline = t => t.replace(/`([^`]+)`/g, (_, c) => '<code>' + c + '</code>')
+          .replace(/\*\*([^*]+)\*\*/g, (_, b) => '<strong>' + b + '</strong>');
         for (const raw of String(s || '').split('\n')) {
           if (raw.trimStart().startsWith('```')) {
             if (inFence) {
