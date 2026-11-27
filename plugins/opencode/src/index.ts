@@ -450,6 +450,36 @@ export default Plugin.define({
           }
         },
       })
+
+      editor.add({
+        name: "update",
+        description: "按 ID 更新一条已有记忆的内容、重要性或标签（适合验证后修正旧记忆，不新增记录）。",
+        input: {
+          type: "object",
+          properties: {
+            id: { type: "string", description: "记忆 ID，先用 recall 找到 ID" },
+            content: { type: "string", description: "更新后的内容" },
+            importance: { type: "number", description: "重要性 0-1", minimum: 0, maximum: 1 },
+            tags: { type: "array", items: { type: "string" }, description: "更新后的标签" },
+          },
+          required: ["id"],
+          additionalProperties: false,
+        },
+        options: { namespace: "memory" },
+        execute: async (input, context) => {
+          try {
+            const value = input as { id: string; content?: string; importance?: number; tags?: string[] }
+            const memory = await scopedClient(context.sessionID).update(value.id, {
+              ...(value.content !== undefined ? { content: value.content } : {}),
+              ...(value.importance !== undefined ? { importance: value.importance } : {}),
+              ...(value.tags ? { tags: value.tags } : {}),
+            })
+            return { content: `已更新 [${memory.id}]: ${memory.content}` }
+          } catch (error) {
+            return { content: `记忆更新失败: ${(error as Error).message}` }
+          }
+        },
+      })
     })
 
     return () => {
