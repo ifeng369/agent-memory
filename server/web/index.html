@@ -31,6 +31,8 @@
     .doc-body h2 { font-size: 18px; margin: 20px 0 8px; }
     .doc-body p { margin: 8px 0; }
     .doc-body pre { background: #f6f8fa; padding: 12px; border-radius: 4px; overflow-x: auto; }
+    .doc-body code { background: #f6f8fa; padding: 1px 4px; border-radius: 3px; font-family: Consolas, Monaco, monospace; font-size: 13px; }
+    .doc-body pre code { background: none; padding: 0; font-size: 13px; }
     .empty { color: #999; padding: 24px; text-align: center; }
     .gate { max-width: 420px; margin: 60px auto; }
     @media print {
@@ -336,15 +338,29 @@
         return String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
       }
       function renderMarkdown(s) {
-        return String(s || '').split('\n').map(line => {
-          const t = escapeHtml(line.trimEnd());
-          if (t.startsWith('### ')) return '<h3>' + t.slice(4) + '</h3>';
-          if (t.startsWith('## ')) return '<h2>' + t.slice(3) + '</h2>';
-          if (t.startsWith('# ')) return '<h1>' + t.slice(2) + '</h1>';
-          if (t.startsWith('- ')) return '<p>• ' + t.slice(2) + '</p>';
-          if (!t) return '<p></p>';
-          return '<p>' + t + '</p>';
-        }).join('');
+        const out = [];
+        let inFence = false, lang = '', code = [];
+        const inline = t => t.replace(/`([^`]+)`/g, (_, c) => '<code>' + c + '</code>');
+        for (const raw of String(s || '').split('\n')) {
+          if (raw.trimStart().startsWith('```')) {
+            if (inFence) {
+              out.push('<pre><code' + (lang ? ' class="language-' + escapeHtml(lang) + '"' : '') + '>' + escapeHtml(code.join('\n')) + '</code></pre>');
+              inFence = false; lang = ''; code = [];
+            } else {
+              inFence = true; lang = raw.trim().slice(3).trim();
+            }
+            continue;
+          }
+          if (inFence) { code.push(raw); continue; }
+          const t = inline(escapeHtml(raw.trimEnd()));
+          if (t.startsWith('### ')) out.push('<h3>' + t.slice(4) + '</h3>');
+          else if (t.startsWith('## ')) out.push('<h2>' + t.slice(3) + '</h2>');
+          else if (t.startsWith('# ')) out.push('<h1>' + t.slice(2) + '</h1>');
+          else if (t.startsWith('- ')) out.push('<p>• ' + t.slice(2) + '</p>');
+          else out.push(t ? '<p>' + t + '</p>' : '<p></p>');
+        }
+        if (inFence) out.push('<pre><code>' + escapeHtml(code.join('\n')) + '</code></pre>');
+        return out.join('');
       }
       function reloadAll() { loadProjects(); loadMemories(); loadDocs(); }
       onMounted(() => {

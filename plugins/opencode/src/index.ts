@@ -99,6 +99,16 @@ function clip(s: string, n: number): string {
   return s.length > n ? s.slice(0, n) + "…" : s
 }
 
+// 有些老项目文档是 GBK，按 UTF-8 读会产生 U+FFFD；严格解码失败时回退 GBK
+function readText(file: string): string {
+  const buf = readFileSync(file)
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buf)
+  } catch {
+    try { return new TextDecoder("gbk").decode(buf) } catch { return buf.toString("utf8") }
+  }
+}
+
 function partText(part: any): string {
   if (part?.type === "text" && typeof part.text === "string") return part.text
   return ""
@@ -206,12 +216,12 @@ export default Plugin.define({
           return
         }
         const fingerprint = files.map((file) => `${file}:${statSync(file).size}:${Math.floor(statSync(file).mtimeMs / 1000)}`).join("|")
-        const cacheKey = `docs-fingerprint:${dir}`
+        const cacheKey = `docs-fingerprint-v2:${dir}`
         if ((await ctx.storage.get(cacheKey)) === fingerprint) {
           docsDone.add(sessionID)
           return
         }
-        const blocks = files.map((file) => `### ${file}\n${clip(readFileSync(file, "utf8"), docs.length ? 20000 : 6000)}`)
+        const blocks = files.map((file) => `### ${file}\n${clip(readText(file), docs.length ? 20000 : 6000)}`)
         const model = await currentModel(sessionID)
         const { text } = await ctx.experimental.generate.text({
           ...(model ? { model } : {}),
