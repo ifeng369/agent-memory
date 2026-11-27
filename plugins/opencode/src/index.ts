@@ -182,10 +182,12 @@ export default Plugin.define({
       const scoped = client.withSession(sessionID)
       return globalSessions.has(sessionID) ? scoped.withProject(GLOBAL_PROJECT) : scoped
     }
-    const currentModel = async () => {
+    const currentModel = async (sessionID: string) => {
       try {
-        const m: any = await ctx.model.default()
-        return m ? { providerID: m.providerID, id: m.id ?? m.modelID } : undefined
+        const info: any = await ctx.session.get({ sessionID })
+        const m = info?.model
+        if (!m?.providerID || !m?.id) return undefined
+        return { providerID: m.providerID, id: m.id, ...(typeof m.variant === "string" ? { variant: m.variant } : {}) }
       } catch {
         return undefined
       }
@@ -210,8 +212,9 @@ export default Plugin.define({
           return
         }
         const blocks = files.map((file) => `### ${file}\n${clip(readFileSync(file, "utf8"), docs.length ? 20000 : 6000)}`)
+        const model = await currentModel(sessionID)
         const { text } = await ctx.experimental.generate.text({
-          model: await currentModel(),
+          ...(model ? { model } : {}),
           prompt: [
             "基于下面的项目文件生成两份中文文档，供团队在开发时参考。",
             "文件可能只有源码; 只写能从文件中确认的内容，不要编造功能。",
@@ -281,24 +284,35 @@ export default Plugin.define({
       }
     })
 
+    // 会话空闲后总结整段对话（含助手回复与工具证据），写入或更新自动记忆
+    const idleTimers = new Map<string, ReturnType<typeof setTimeout>>()
+    const busy = new Set<string>()
+    function scheduleCapture(sessionID: string) {
+      const previous = idleTimers.get(sessionID)
+      if (previous) clearTimeout(previous)
+      idleTimers.set(sessionID, setTimeout(() => {
+        idleTimers.delete(sessionID)
+        void captureIdle(sessionID)
+      }, IDLE_DEBOUNCE_MS))
+    }
+
     await ctx.session.hook("prompt", async (event) => {
       const text = event.prompt.text
       if (text.includes("退出全局记忆") || text.includes("切回项目记忆")) globalSessions.delete(event.sessionID)
       else if (text.includes("全局记忆")) globalSessions.add(event.sessionID)
       await ensureDocs(event.sessionID)
+      scheduleCapture(event.sessionID)
     })
 
-    // 会话空闲后总结整段对话（含助手回复与工具证据），写入或更新自动记忆
-    const idleTimers = new Map<string, ReturnType<typeof setTimeout>>()
-    const busy = new Set<string>()
-    const captureIdle = async (sessionID: string) => {
+    async function captureIdle(sessionID: string) {
       if (busy.has(sessionID)) return
       busy.add(sessionID)
       try {
         const messages: any[] = await ctx.session.context({ sessionID })
         const evidence = buildCaptureEvidence(messages)
         if (evidence.length < 40) return
-        const { text } = await ctx.experimental.generate.text({ model: await currentModel(), prompt: buildCapturePrompt(evidence) })
+        const model = await currentModel(sessionID)
+        const { text } = await ctx.experimental.generate.text({ ...(model ? { model } : {}), prompt: buildCapturePrompt(evidence) })
         const content = String(text || "").trim()
         if (!content || content === "SKIP") return
         const scoped = scopedClient(sessionID)
@@ -323,12 +337,7 @@ export default Plugin.define({
         for await (const event of ctx.event.subscribe({ types: ["session.idle"], signal: controller.signal })) {
           const sessionID = (event as any)?.properties?.sessionID
           if (!sessionID) continue
-          const previous = idleTimers.get(sessionID)
-          if (previous) clearTimeout(previous)
-          idleTimers.set(sessionID, setTimeout(() => {
-            idleTimers.delete(sessionID)
-            void captureIdle(sessionID)
-          }, IDLE_DEBOUNCE_MS))
+          scheduleCapture(sessionID)
         }
       } catch (e) {
         if (!controller.signal.aborted) console.error("[agent-memory] event stream failed", e)
